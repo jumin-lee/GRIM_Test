@@ -63,8 +63,8 @@
           }]
         });
 
-        //const encoder = device.createCommandEncoder();
-        //const pass = encoder.beginComputePass();
+        const encoder = device.createCommandEncoder();
+        const pass = encoder.beginComputePass();
         //pass.setPipeline(pipeline);
         pass.setBindGroup(0, bindGroup);
         //pass.dispatchWorkgroups(1); // 1 thread 만 dispatch
