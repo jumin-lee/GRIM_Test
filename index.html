@@ -26,10 +26,10 @@
 
       const shaderCode = `
         @group(0) @binding(0)
-        var<storage, read> bufferA: array<u32>;
+        var<storage, read_write> bufferA: array<u32>;
 
         @group(0) @binding(1)
-        var<storage, read> bufferB: array<u32>; // 바인딩만, 실제 사용 안함
+        var<storage, read_write> bufferB: array<u32>; // 바인딩만, 실제 사용 안함
 
         @compute @workgroup_size(1)
         fn main(@builtin(global_invocation_id) id : vec3<u32>) {
@@ -72,13 +72,13 @@
       for (let i = 0; i < TOTAL_BLOCK_PAIRS; i++) {
         const bufA = device.createBuffer({
           size: BLOCK_SIZE,
-          usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+          usage: GPUBufferUsage.STORAGE //| GPUBufferUsage.COPY_DEST,
           mappedAtCreation: false
         });
 
         const bufB = device.createBuffer({
           size: BLOCK_SIZE,
-          usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+          usage: GPUBufferUsage.STORAGE //| GPUBufferUsage.COPY_DEST,
           mappedAtCreation: false
         });
 
