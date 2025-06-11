@@ -2,16 +2,16 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>WebGPU Partial Access Buffers</title>
+  <title>WebGPU Manual BindGroupLayout</title>
 </head>
 <body>
-  <h1>WebGPU 64MB × 2 Buffers (Write + Bound-Unused)</h1>
+  <h1>WebGPU 64MB × 2 Buffers (Manual Layout, Unused Binding)</h1>
   <p id="status">Initializing...</p>
 
   <script type="module">
-    const TOTAL_GB = 2; // 총 메모리 용량 조절 (GB)
-    const BLOCK_SIZE = 64 * 1024 * 1024; // 각 버퍼는 64MB
-    const TOTAL_BLOCK_PAIRS = (TOTAL_GB * 1024) / 128; // 128MB per pair
+    const TOTAL_GB = 2;
+    const BLOCK_SIZE = 64 * 1024 * 1024; // 64MB
+    const TOTAL_BLOCK_PAIRS = (TOTAL_GB * 1024) / 128;
 
     let buffers = [];
 
@@ -29,23 +29,43 @@
         var<storage, read_write> bufferA: array<u32>;
 
         @group(0) @binding(1)
-        var<storage, read_write> bufferB: array<u32>; // 바인딩만, 실제 미사용
+        var<storage, read_write> bufferB: array<u32>; // 바인딩만, 실제 사용 안함
 
         @compute @workgroup_size(1)
         fn main(@builtin(global_invocation_id) id : vec3<u32>) {
           if (id.x == 0u) {
             bufferA[0] = 1u;
-            let dummy = bufferB.length();
           }
         }
       `;
 
       const module = device.createShaderModule({ code: shaderCode });
+
+      // ✅ 명시적인 BindGroupLayout 선언
+      const bindGroupLayout = device.createBindGroupLayout({
+        entries: [
+          {
+            binding: 0,
+            visibility: GPUShaderStage.COMPUTE,
+            buffer: { type: "storage" }
+          },
+          {
+            binding: 1,
+            visibility: GPUShaderStage.COMPUTE,
+            buffer: { type: "storage" }
+          }
+        ]
+      });
+
+      const pipelineLayout = device.createPipelineLayout({
+        bindGroupLayouts: [bindGroupLayout]
+      });
+
       const pipeline = device.createComputePipeline({
-        layout: "auto",
+        layout: pipelineLayout,
         compute: {
           module,
-          entryPoint: "main",
+          entryPoint: "main"
         }
       });
 
@@ -60,10 +80,10 @@
           usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC
         });
 
-        buffers.push(bufA, bufB); // 참조 유지
+        buffers.push(bufA, bufB);
 
         const bindGroup = device.createBindGroup({
-          layout: pipeline.getBindGroupLayout(0),
+          layout: bindGroupLayout,
           entries: [
             { binding: 0, resource: { buffer: bufA } },
             { binding: 1, resource: { buffer: bufB } }
@@ -76,12 +96,11 @@
         pass.setBindGroup(0, bindGroup);
         pass.dispatchWorkgroups(1);
         pass.end();
-
         device.queue.submit([encoder.finish()]);
       }
 
       document.getElementById("status").textContent =
-        `✅ ${TOTAL_GB}GB allocated (as ${TOTAL_BLOCK_PAIRS} pairs of 64MB). bufA written, bufB bound-only.`;
+        `✅ ${TOTAL_GB}GB allocated as ${TOTAL_BLOCK_PAIRS} pairs of 64MB. bufA written, bufB bound but unused.`;
     }
 
     function holdForever() {
