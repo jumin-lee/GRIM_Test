@@ -2,18 +2,16 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>WebGPU Minimal Write Allocation</title>
+  <title>WebGPU Partial Buffer Usage</title>
 </head>
 <body>
-  <h1>WebGPU GPU Memory Allocation (1-byte write)</h1>
+  <h1>WebGPU GPU Memory Allocation (Access + Unused)</h1>
   <p id="status">Initializing...</p>
 
   <script type="module">
-    // ✅ 조절: 원하는 GB 수치 입력
-    const TOTAL_GB = 6;
-
-    const BLOCK_SIZE = 128 * 1024 * 1024; // 128MB
-    const TOTAL_BLOCKS = (TOTAL_GB * 1024) / 128;
+    const TOTAL_GB = 4;
+    const BLOCK_SIZE = 64 * 1024 * 1024; // 64MB
+    const TOTAL_BLOCK_PAIRS = (TOTAL_GB * 1024) / 128;
 
     let buffers = [];
 
@@ -26,15 +24,19 @@
       const adapter = await navigator.gpu.requestAdapter();
       const device = await adapter.requestDevice();
 
-      // ✅ shader: 1바이트(write 4B)만 쓰는 최소 커널
+      // bufA에만 write, bufB는 바인딩만
       const shaderCode = `
         @group(0) @binding(0)
-        var<storage, read_write> buffer: array<u32>;
+        var<storage, read_write> bufferA: array<u32>;
+
+        @group(0) @binding(1)
+        var<storage, read_write> bufferB: array<u32>; // 바인딩되지만 미사용
 
         @compute @workgroup_size(1)
         fn main(@builtin(global_invocation_id) id : vec3<u32>) {
-          // Just "read" (no write)
-          let x = buffer[0];
+          if (id.x == 0u) {
+            bufferA[0] = 1u;
+          }
         }
       `;
 
@@ -47,38 +49,44 @@
         }
       });
 
-      for (let i = 0; i < TOTAL_BLOCKS; i++) {
-        const buf = device.createBuffer({
+      for (let i = 0; i < TOTAL_BLOCK_PAIRS; i++) {
+        const bufA = device.createBuffer({
           size: BLOCK_SIZE,
-          usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-          mappedAtCreation: false 
+          usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
         });
-        buffers.push(buf);
+
+        const bufB = device.createBuffer({
+          size: BLOCK_SIZE,
+          usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+        });
+
+        buffers.push(bufA, bufB);
 
         const bindGroup = device.createBindGroup({
           layout: pipeline.getBindGroupLayout(0),
-          entries: [{
-            binding: 0,
-            resource: { buffer: buf }
-          }]
+          entries: [
+            { binding: 0, resource: { buffer: bufA } },
+            { binding: 1, resource: { buffer: bufB } },
+          ],
         });
 
         const encoder = device.createCommandEncoder();
         const pass = encoder.beginComputePass();
         pass.setPipeline(pipeline);
         pass.setBindGroup(0, bindGroup);
-        pass.dispatchWorkgroups(1); // 1 thread 만 dispatch
+        pass.dispatchWorkgroups(1);
         pass.end();
+
         device.queue.submit([encoder.finish()]);
       }
 
       document.getElementById("status").textContent =
-        `✅ ${TOTAL_GB}GB GPU memory allocated and lightly initialized (1 write per buffer).`;
+        `✅ ${TOTAL_GB}GB allocated as ${TOTAL_BLOCK_PAIRS} pairs of 64MB. Only bufA used, bufB bound but unused.`;
     }
 
     function holdForever() {
       setInterval(() => {
-        console.log(`⏳ Holding ${buffers.length} × 128MB GPU buffers → Total ${(buffers.length * 128)} MB`);
+        console.log(`⏳ Holding ${buffers.length} × 64MB GPU buffers → Total ${(buffers.length * 64 / 1024).toFixed(2)} GB`);
       }, 10000);
     }
 
