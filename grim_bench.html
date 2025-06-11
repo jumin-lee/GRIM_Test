@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>WebGPU N GB Allocation</title>
+</head>
+<body>
+  <h1>WebGPU GPU Memory Allocation (Configurable)</h1>
+  <p id="status">Initializing...</p>
+
+  <script type="module">
+    // ✅ 조절: 여기서 원하는 GB 설정 (최대 8까지 권장)
+    const TOTAL_GB = 2;
+
+    // 내부 상수
+    const BLOCK_SIZE = 128 * 1024 * 1024; // 128MB
+    const ELEMENTS_PER_BLOCK = BLOCK_SIZE / 4; // u32
+    const TOTAL_BLOCKS = (TOTAL_GB * 1024) / 128;
+    const WORKGROUP_SIZE = 64;
+
+    let buffers = [];
+
+    async function init() {
+      if (!navigator.gpu) {
+        document.getElementById("status").textContent = "❌ WebGPU not supported.";
+        return;
+      }
+
+      const adapter = await navigator.gpu.requestAdapter();
+      const device = await adapter.requestDevice();
+
+      const shaderCode = `
+        @group(0) @binding(0)
+        var<storage, read_write> buffer: array<u32>;
+
+        @compute @workgroup_size(${WORKGROUP_SIZE})
+        fn main(@builtin(global_invocation_id) id : vec3<u32>) {
+          let index = id.x;
+          if (index < arrayLength(&buffer)) {
+            buffer[index] = 1u;
+          }
+        }
+      `;
+      const module = device.createShaderModule({ code: shaderCode });
+      const pipeline = device.createComputePipeline({
+        layout: "auto",
+        compute: {
+          module,
+          entryPoint: "main",
+        }
+      });
+
+      for (let i = 0; i < TOTAL_BLOCKS; i++) {
+        const buf = device.createBuffer({
+          size: BLOCK_SIZE,
+          usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC
+        });
+        buffers.push(buf);
+
+        const bindGroup = device.createBindGroup({
+          layout: pipeline.getBindGroupLayout(0),
+          entries: [{
+            binding: 0,
+            resource: {
+              buffer: buf,
+              offset: 0,
+              size: BLOCK_SIZE
+            },
+          }]
+        });
+
+        const encoder = device.createCommandEncoder();
+        const pass = encoder.beginComputePass();
+        pass.setPipeline(pipeline);
+        pass.setBindGroup(0, bindGroup);
+
+        const totalWorkgroups = Math.ceil(ELEMENTS_PER_BLOCK / WORKGROUP_SIZE);
+        const dispatchX = 8192;
+        const dispatchY = Math.ceil(totalWorkgroups / dispatchX);
+
+        pass.dispatchWorkgroups(dispatchX, dispatchY);
+        pass.end();
+
+        device.queue.submit([encoder.finish()]);
+      }
+
+      document.getElementById("status").textContent =
+        `✅ ${TOTAL_GB}GB GPU memory allocated, initialized, and held (${TOTAL_BLOCKS} × 128MB).`;
+    }
+
+    function holdForever() {
+      setInterval(() => {
+        console.log(`⏳ Holding ${buffers.length} × 128MB GPU buffers → Total ${(buffers.length * 128)} MB`);
+      }, 10000);
+    }
+
+    init().then(holdForever);
+  </script>
+</body>
+</html>
