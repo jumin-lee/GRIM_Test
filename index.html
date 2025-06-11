@@ -10,7 +10,7 @@
 
   <script type="module">
     // ✅ 조절: 원하는 GB 수치 입력
-    const TOTAL_GB = 8;
+    const TOTAL_GB = 6;
 
     const BLOCK_SIZE = 128 * 1024 * 1024; // 128MB
     const TOTAL_BLOCKS = (TOTAL_GB * 1024) / 128;
@@ -65,9 +65,9 @@
 
         const encoder = device.createCommandEncoder();
         const pass = encoder.beginComputePass();
-        //pass.setPipeline(pipeline);
+        pass.setPipeline(pipeline);
         pass.setBindGroup(0, bindGroup);
-        //pass.dispatchWorkgroups(1); // 1 thread 만 dispatch
+        pass.dispatchWorkgroups(1); // 1 thread 만 dispatch
         pass.end();
         device.queue.submit([encoder.finish()]);
       }
