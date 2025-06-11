@@ -72,13 +72,13 @@
       for (let i = 0; i < TOTAL_BLOCK_PAIRS; i++) {
         const bufA = device.createBuffer({
           size: BLOCK_SIZE,
-          usage: GPUBufferUsage.STORAGE //| GPUBufferUsage.COPY_DEST,
+          usage: GPUBufferUsage.STORAGE, //| GPUBufferUsage.COPY_DEST,
           mappedAtCreation: false
         });
 
         const bufB = device.createBuffer({
           size: BLOCK_SIZE,
-          usage: GPUBufferUsage.STORAGE //| GPUBufferUsage.COPY_DEST,
+          usage: GPUBufferUsage.STORAGE, //| GPUBufferUsage.COPY_DEST,
           mappedAtCreation: false
         });
 
