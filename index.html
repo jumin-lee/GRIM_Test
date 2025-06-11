@@ -2,10 +2,10 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>WebGPU Active GPU Write (bufA + bufB)</title>
+  <title>WebGPU Active Compute (Safe Dispatch)</title>
 </head>
 <body>
-  <h1>WebGPU 64MB × 2 Buffers – Active Compute</h1>
+  <h1>WebGPU 64MB × 2 Buffers – GPU Compute Enabled</h1>
   <p id="status">Initializing...</p>
 
   <script type="module">
@@ -13,7 +13,8 @@
     const BLOCK_SIZE = 64 * 1024 * 1024; // 64MB
     const TOTAL_U32_PER_BLOCK = BLOCK_SIZE / 4;
     const TOTAL_BLOCK_PAIRS = (TOTAL_GB * 1024) / 128;
-    const WORKGROUP_SIZE = 64;
+    const WORKGROUP_SIZE = 64; // GPU threads per workgroup
+    const MAX_X = 65535;
 
     let buffers = [];
 
@@ -89,14 +90,19 @@
 
         const totalInvocations = TOTAL_U32_PER_BLOCK;
         const workgroupCount = Math.ceil(totalInvocations / WORKGROUP_SIZE);
-        pass.dispatchWorkgroups(workgroupCount);
+
+        // ✅ 안전한 2D 분할
+        const dispatchX = Math.min(workgroupCount, MAX_X);
+        const dispatchY = Math.ceil(workgroupCount / MAX_X);
+
+        pass.dispatchWorkgroups(dispatchX, dispatchY);
         pass.end();
 
         device.queue.submit([encoder.finish()]);
       }
 
       document.getElementById("status").textContent =
-        `✅ ${TOTAL_GB}GB allocated as ${TOTAL_BLOCK_PAIRS} pairs of 64MB with active compute.`;
+        `✅ ${TOTAL_GB}GB allocated as ${TOTAL_BLOCK_PAIRS} × 64MB pairs. GPU compute dispatched safely.`;
     }
 
     function holdForever() {
