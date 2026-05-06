@@ -18,76 +18,78 @@
     let buffers = [];
 
     async function init() {
-      if (!navigator.gpu) {
-        document.getElementById("status").textContent = "❌ WebGPU not supported.";
-        return;
-      }
+      if (!navigator.gpu) {
+        document.getElementById("status").textContent = "❌ WebGPU not supported.";
+        return;
+      }
 
-      const adapter = await navigator.gpu.requestAdapter();
-      const device = await adapter.requestDevice();
+      const adapter = await navigator.gpu.requestAdapter();
+      const device = await adapter.requestDevice();
 
-      const shaderCode = `
-        @group(0) @binding(0)
-        var<storage, read_write> data: array<u32>;
+      // 보이지 않는 특수 공백을 모두 일반 스페이스로 교체했습니다.
+      const shaderCode = `
+        @group(0) @binding(0)
+        var<storage, read_write> data: array<u32>;
 
-        @compute @workgroup_size(${WORKGROUP_SIZE})
-        fn main(@builtin(global_invocation_id) id : vec3<u32>) {
-          let i = id.x;
-          if (i < arrayLength(&data)) {
-            var v = data[i];
-            for (var j: u32 = 0u; j < 1000u; j = j + 1u) {
-              v = v + j;
-              v = v ^ (j << 2u);
-            }
-            data[i] = v;
-          }
-        }
-      `;
+        @compute @workgroup_size(${WORKGROUP_SIZE})
+        fn main(@builtin(global_invocation_id) id : vec3<u32>) {
+          let i = id.x;
+          if (i < arrayLength(&data)) {
+            var v = data[i];
+            for (var j: u32 = 0u; j < 1000u; j = j + 1u) {
+              v = v + j;
+              v = v ^ (j << 2u);
+            }
+            data[i] = v;
+          }
+        }
+      `;
 
-      const module = device.createShaderModule({ code: shaderCode });
-      const pipeline = device.createComputePipeline({
-        layout: "auto",
-        compute: { module, entryPoint: "main" }
-      });
+      const module = device.createShaderModule({ code: shaderCode });
+      const pipeline = device.createComputePipeline({
+        layout: "auto",
+        compute: { module, entryPoint: "main" }
+      });
 
       const statusEl = document.getElementById("status");
 
-      for (let i = 0; i < TOTAL_BLOCKS; i++) {
-        const buffer = device.createBuffer({
-          size: BLOCK_SIZE,
-          usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
-        });
-        buffers.push(buffer);
+      for (let i = 0; i < TOTAL_BLOCKS; i++) {
+        const buffer = device.createBuffer({
+          size: BLOCK_SIZE,
+          usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
+        });
+        buffers.push(buffer);
 
-        const bindGroup = device.createBindGroup({
-          layout: pipeline.getBindGroupLayout(0),
-          entries: [{ binding: 0, resource: { buffer } }]
-        });
+        const bindGroup = device.createBindGroup({
+          layout: pipeline.getBindGroupLayout(0),
+          entries: [{ binding: 0, resource: { buffer } }]
+        });
 
-        const encoder = device.createCommandEncoder();
-        const pass = encoder.beginComputePass();
-        pass.setPipeline(pipeline);
-        pass.setBindGroup(0, bindGroup);
+        const encoder = device.createCommandEncoder();
+        const pass = encoder.beginComputePass();
+        pass.setPipeline(pipeline);
+        pass.setBindGroup(0, bindGroup);
 
-        const numWorkgroups = Math.ceil(ELEMENTS / WORKGROUP_SIZE);
-        const dispatchX = Math.min(numWorkgroups, 65535);
-        const dispatchY = Math.ceil(numWorkgroups / 65535);
+        const numWorkgroups = Math.ceil(ELEMENTS / WORKGROUP_SIZE);
+        const dispatchX = Math.min(numWorkgroups, 65535);
+        const dispatchY = Math.ceil(numWorkgroups / 65535);
 
-        pass.dispatchWorkgroups(dispatchX, dispatchY);
-        pass.end();
+        pass.dispatchWorkgroups(dispatchX, dispatchY);
+        pass.end();
 
-        device.queue.submit([encoder.finish()]);
+        device.queue.submit([encoder.finish()]);
 
-        // 핵심 추가 사항: GPU가 이번 블록 연산을 끝낼 때까지 대기합니다.
+        // GPU가 이번 블록 연산을 끝낼 때까지 대기
         await device.queue.onSubmittedWorkDone();
 
-        // 진행 상황을 화면에 실시간으로 업데이트합니다.
+        // 진행 상황 업데이트
         const currentGB = ((i + 1) * BLOCK_SIZE) / (1024 * 1024 * 1024);
         statusEl.textContent = `⏳ Stress Testing... Allocated & Computed: ${currentGB.toFixed(2)} GB / ${TOTAL_GB} GB`;
-      }
+      }
 
-      statusEl.textContent = `✅ ${TOTAL_GB}GB Allocation & Compute Complete!`;
-    }
+      statusEl.textContent = `✅ ${TOTAL_GB}GB Allocation & Compute Complete!`;
+    }
+
     init();
   </script>
 </body>
